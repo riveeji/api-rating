@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="grid cards">
+    <div class="panel">
+      <div class="muted">文档数</div>
+      <div class="metric">{{ payload.summary.documents }}</div>
+    </div>
+    <div class="panel">
+      <div class="muted">切块数</div>
+      <div class="metric">{{ payload.summary.chunks }}</div>
+    </div>
+    <div class="panel">
+      <div class="muted">任务数</div>
+      <div class="metric">{{ payload.summary.tasks }}</div>
+    </div>
+    <div class="panel">
+      <div class="muted">配置数</div>
+      <div class="metric">{{ payload.summary.configs }}</div>
+    </div>
+    <div class="panel">
+      <div class="muted">实验数</div>
+      <div class="metric">{{ payload.summary.experiments }}</div>
+    </div>
+    <div class="panel">
+      <div class="muted">运行数</div>
+      <div class="metric">{{ payload.summary.runs }}</div>
+    </div>
+    <div class="panel">
+      <div class="muted">助手会话数</div>
+      <div class="metric">{{ payload.summary.assistant_sessions }}</div>
+    </div>
+  </section>
+
+  <section class="grid two" style="margin-top: 18px;">
+    <div class="panel">
+      <h2>运行 Benchmark</h2>
+      <p class="muted">按任务组和配置组发起实验，自动记录完整轨迹、评分与聚合指标。</p>
+      <div class="toolbar" style="margin-bottom: 12px;">
+        <label>
+          <span class="muted">任务预设</span><br />
+          <select id="task-preset">
+            {% for preset in payload.task_presets %}
+              <option value="{{ preset.preset }}" {% if preset.preset == "all" %}selected{% endif %}>
+                {{ preset.label }} ({{ preset.count }})
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span class="muted">配置预设</span><br />
+          <select id="config-preset">
+            {% for preset in payload.config_presets %}
+              <option value="{{ preset.preset }}" {% if preset.preset == "all" %}selected{% endif %} {% if preset.count == 0 %}disabled{% endif %}>
+                {{ preset.label }} ({{ preset.count }})
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span class="muted">任务上限</span><br />
+          <input id="task-limit" type="number" min="1" placeholder="留空表示全部" />
+        </label>
+      </div>
+      <div class="toolbar">
+        <button id="run-benchmark">运行实验</button>
+        <a href="/assistant"><button class="secondary" type="button">打开知识库助手</button></a>
+        <a href="/experiments"><button class="secondary" type="button">查看实验列表</button></a>
+        <a href="/leaderboard"><button class="secondary" type="button">打开排行榜</button></a>
+      </div>
+      <pre id="run-output">当前会话尚未触发新的实验。</pre>
+    </div>
+    <div class="panel">
+      <h2>当前运行环境</h2>
+      {% if payload.latest_experiment %}
+        <p>
+          <strong>最近实验：</strong>
+          <a href="/experiments/{{ payload.latest_experiment.experiment_id }}">
+            {{ payload.latest_experiment.experiment_id }}
+          </a>
+        </p>
+        <pre>{{ payload.latest_experiment.metrics | tojson(indent=2) }}</pre>
+      {% else %}
+        <p class="muted">还没有实验记录。</p>
+      {% endif %}
+      <p class="muted">
+        实时 Qwen：{{ "已启用" if payload.runtime.live_qwen_enabled else "未启用" }}<br />
+        Ollama：{{ "已启用" if payload.runtime.live_ollama_enabled else "未启用" }}<br />
+        Ollama Base URL: {{ payload.runtime.ollama_base_url }}<br />
+        Planner: {{ payload.runtime.planner_model }}<br />
+        Executor: {{ payload.runtime.executor_model }}<br />
+        Verifier: {{ payload.runtime.verifier_model }}
+      </p>
+    </div>
+  </section>
+
+  <section class="grid two" style="margin-top: 18px;">
+    <div class="panel">
+      <h2>排行榜快照</h2>
+      <div id="leaderboard-chart" style="height: 320px;"></div>
+    </div>
+    <div class="panel">
+      <h2>失败类型分布</h2>
+      <div id="failure-chart" style="height: 320px;"></div>
+    </div>
+  </section>
+
+  <section class="grid two" style="margin-top: 18px;">
+    <div class="panel">
+      <h2>最近实验</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>实验 ID</th>
+              <th>任务数</th>
+              <th>配置数</th>
+              <th>成功率</th>
+              <th>创建时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for experiment in payload.recent_experiments %}
+              <tr>
+                <td><a href="/experiments/{{ experiment.experiment_id }}">{{ experiment.experiment_id }}</a></td>
+                <td>{{ experiment.task_ids | length }}</td>
+                <td>{{ experiment.config_ids | length }}</td>
+                <td>{{ "%.2f"|format(experiment.metrics.success_rate * 100) if experiment.metrics.success_rate is defined else "0.00" }}%</td>
+                <td>{{ experiment.created_at }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="5" class="muted">暂无实验记录。</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>最近运行</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>运行 ID</th>
+              <th>任务</th>
+              <th>配置</th>
+              <th>策略</th>
+              <th>状态</th>
+              <th>结束时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in payload.summary.recent_runs %}
+              <tr>
+                <td><a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a></td>
+                <td>{{ run.task_id }}</td>
+                <td>{{ run.config_id }}</td>
+                <td>{{ run.strategy }}</td>
+                <td>{{ run.status }}</td>
+                <td>{{ run.finished_at }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="6" class="muted">暂无运行记录。</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const leaderboard = {{ leaderboard_json | safe }};
+    const failures = {{ failures_json | safe }};
+
+    Plotly.newPlot(
+      "leaderboard-chart",
+      [{
+        type: "bar",
+        x: leaderboard.map((item) => item.display_name),
+        y: leaderboard.map((item) => item.success_rate),
+        marker: { color: "#b55d31" }
+      }],
+      {
+        margin: { t: 10, r: 10, b: 100, l: 40 },
+        yaxis: { title: "成功率", range: [0, 1] }
+      },
+      { responsive: true }
+    );
+
+    const failureCounts = failures.reduce((acc, item) => {
+      acc[item.failure_type] = (acc[item.failure_type] || 0) + 1;
+      return acc;
+    }, {});
+
+    Plotly.newPlot(
+      "failure-chart",
+      [{
+        type: "pie",
+        labels: Object.keys(failureCounts).length ? Object.keys(failureCounts) : ["暂无失败"],
+        values: Object.values(failureCounts).length ? Object.values(failureCounts) : [1],
+        marker: { colors: ["#b55d31", "#d17c4f", "#e1b89a", "#704931", "#9b2c2c"] }
+      }],
+      {
+        margin: { t: 10, r: 10, b: 10, l: 10 }
+      },
+      { responsive: true }
+    );
+
+    document.getElementById("run-benchmark").addEventListener("click", async () => {
+      const output = document.getElementById("run-output");
+      const taskPreset = document.getElementById("task-preset").value;
+      const configPreset = document.getElementById("config-preset").value;
+      const limitValue = document.getElementById("task-limit").value;
+      const body = {
+        task_preset: taskPreset,
+        config_preset: configPreset
+      };
+      if (limitValue) {
+        body.limit = Number(limitValue);
+      }
+      output.textContent = "实验运行中...";
+      const response = await fetch("/experiments/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (response.ok && data.experiment_id) {
+        window.setTimeout(() => {
+          window.location.href = `/experiments/${data.experiment_id}`;
+        }, 900);
+      }
+    });
+  </script>
+{% endblock %}

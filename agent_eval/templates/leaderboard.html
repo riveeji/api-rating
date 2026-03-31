@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="panel">
+    <h2>排行榜</h2>
+    <p class="muted">每一行都代表一个配置在当前数据库全部运行结果上的聚合指标。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>配置</th>
+            <th>策略</th>
+            <th>成功率</th>
+            <th>平均时延</th>
+            <th>平均 Token</th>
+            <th>平均成本</th>
+            <th>工具报错率</th>
+            <th>非法动作率</th>
+            <th>恢复率</th>
+            <th>平均步数</th>
+            <th>运行次数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+            <tr>
+              <td>{{ entry.display_name }}</td>
+              <td>{{ entry.strategy }}</td>
+              <td>{{ "%.2f"|format(entry.success_rate * 100) }}%</td>
+              <td>{{ "%.2f"|format(entry.avg_latency_ms) }} ms</td>
+              <td>{{ "%.1f"|format(entry.avg_tokens) }}</td>
+              <td>{{ "%.6f"|format(entry.avg_cost) }}</td>
+              <td>{{ "%.2f"|format(entry.tool_error_rate * 100) }}%</td>
+              <td>{{ "%.2f"|format(entry.invalid_action_rate * 100) }}%</td>
+              <td>{{ "%.2f"|format(entry.recovery_rate * 100) }}%</td>
+              <td>{{ "%.2f"|format(entry.avg_steps) }}</td>
+              <td>{{ entry.total_runs }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="11" class="muted">还没有 Benchmark 结果。</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

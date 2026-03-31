@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="panel">
+    <h2>实验列表</h2>
+    <p class="muted">这里展示最近的实验批次。每个实验都保留了聚合指标和完整运行明细。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>实验 ID</th>
+            <th>任务数</th>
+            <th>配置数</th>
+            <th>总运行数</th>
+            <th>成功率</th>
+            <th>平均时延</th>
+            <th>创建时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for experiment in items %}
+            <tr>
+              <td><a href="/experiments/{{ experiment.experiment_id }}">{{ experiment.experiment_id }}</a></td>
+              <td>{{ experiment.task_ids | length }}</td>
+              <td>{{ experiment.config_ids | length }}</td>
+              <td>{{ experiment.total_runs }}</td>
+              <td>{{ "%.2f"|format(experiment.metrics.success_rate * 100) if experiment.metrics.success_rate is defined else "0.00" }}%</td>
+              <td>{{ "%.2f"|format(experiment.metrics.avg_latency_ms) if experiment.metrics.avg_latency_ms is defined else "0.00" }} ms</td>
+              <td>{{ experiment.created_at }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" class="muted">还没有实验记录。</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

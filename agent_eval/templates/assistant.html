@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="assistant-layout">
+    <aside class="panel assistant-sidebar">
+      <h2>会话列表</h2>
+      <p class="muted">上层是真实提问入口，下层仍然保留离线实验平台。</p>
+      <div class="session-list">
+        {% for item in payload.sessions %}
+          <a class="session-link {% if payload.session and item.session_id == payload.session.session_id %}active{% endif %}" href="/assistant/{{ item.session_id }}">
+            <strong>{{ item.title }}</strong>
+            <span class="muted">{{ item.config_id or "未指定配置" }}</span>
+            <span class="muted">{{ item.updated_at }}</span>
+          </a>
+        {% else %}
+          <div class="muted">还没有会话。先发起一个问题。</div>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <div class="assistant-main">
+      <section class="panel">
+        <h2>在线知识库助手</h2>
+        <p class="muted">优先使用本地知识库和工具链回答问题。若实时模型不可用，会回退到本地确定性检索回答。</p>
+        <div class="toolbar" style="align-items: flex-end;">
+          <label style="flex: 1 1 320px;">
+            <span class="muted">当前策略配置</span><br />
+            <select id="assistant-config">
+              {% for config in payload.configs %}
+                <option value="{{ config.config_id }}" {% if payload.session and payload.session.config_id == config.config_id %}selected{% elif not payload.session and payload.default_config_id == config.config_id %}selected{% endif %}>
+                  {{ config.display_name }}{% if config.recommended %}（推荐）{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="toolbar" style="margin-top: 12px;">
+          <textarea id="assistant-prompt" rows="4" style="width: 100%;" placeholder="例如：FastAPI 里如何隐藏内部字段并只返回公开字段？&#10;或者：请帮我分析 CASE-001 应该关注什么特性。"></textarea>
+        </div>
+        <div class="toolbar" style="margin-top: 12px;">
+          <button id="assistant-send">发送问题</button>
+          <a href="/assistant"><button class="secondary" type="button">新建会话</button></a>
+        </div>
+        <pre id="assistant-status">等待提问。</pre>
+      </section>
+
+      <section class="panel" style="margin-top: 18px;">
+        <h2>对话内容</h2>
+        {% if payload.session %}
+          <p>
+            <span class="badge">{{ payload.session.session_id }}</span>
+            <span class="muted">共 {{ payload.session.message_count }} 条消息</span>
+          </p>
+        {% endif %}
+        <div class="message-list">
+          {% for message in payload.messages %}
+            <article class="message-card {{ message.role }}">
+              <div class="message-meta">
+                <strong>{{ "用户" if message.role == "user" else "助手" }}</strong>
+                <span class="muted">{{ message.created_at }}</span>
+                {% if message.config_id %}
+                  <span class="badge">{{ message.config_id }}</span>
+                {% endif %}
+              </div>
+              <div class="message-content">{{ message.content }}</div>
+              {% if message.citations %}
+                <p class="muted">引用：{{ message.citations | join(", ") }}</p>
+              {% endif %}
+              {% if message.run_payload %}
+                <div class="metric-strip">
+                  <span>时延 {{ "%.2f"|format(message.run_payload.total_latency_ms) }} ms</span>
+                  <span>Token {{ message.run_payload.total_tokens }}</span>
+                  <span>成本 {{ "%.6f"|format(message.run_payload.total_cost_estimate) }}</span>
+                </div>
+                <details style="margin-top: 10px;">
+                  <summary>查看执行轨迹</summary>
+                  {% for step in message.run_payload.steps %}
+                    <div class="step">
+                      <p><strong>步骤 {{ step.step_index }}</strong> <span class="badge">{{ step.phase }}</span></p>
+                      <p>{{ step.thought }}</p>
+                      {% if step.action_payload %}
+                        <pre>{{ step.action_payload | tojson(indent=2) }}</pre>
+                      {% endif %}
+                      {% if step.observation %}
+                        <pre>{{ step.observation | tojson(indent=2) }}</pre>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </details>
+              {% endif %}
+            </article>
+          {% else %}
+            <div class="muted">当前会话还没有消息。</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <script>
+    const sendButton = document.getElementById("assistant-send");
+    const promptInput = document.getElementById("assistant-prompt");
+    const configSelect = document.getElementById("assistant-config");
+    const statusOutput = document.getElementById("assistant-status");
+    const currentSessionId = {{ payload.session.session_id | tojson if payload.session else "null" }};
+
+    sendButton.addEventListener("click", async () => {
+      const prompt = promptInput.value.trim();
+      if (!prompt) {
+        statusOutput.textContent = "请输入一个具体问题。";
+        return;
+      }
+      statusOutput.textContent = "助手正在检索文档并组织答案...";
+      const response = await fetch("/assistant/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          config_id: configSelect.value,
+          prompt
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        statusOutput.textContent = data.detail || "请求失败";
+        return;
+      }
+      statusOutput.textContent = "回答已生成，正在跳转到会话详情。";
+      const sessionId = data.session?.session_id;
+      if (sessionId) {
+        window.location.href = `/assistant/${sessionId}`;
+      }
+    });
+  </script>
+{% endblock %}

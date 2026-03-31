@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="grid two">
+    <div class="panel">
+      <h2>运行摘要</h2>
+      <p><span class="badge">{{ payload.run.run_id }}</span></p>
+      <p><strong>任务：</strong> {{ payload.task.task_id }}<br />{{ payload.task.title }}</p>
+      <p><strong>配置：</strong> {{ payload.config.display_name }}<br /><span class="muted">{{ payload.run.strategy }}</span></p>
+      <p><strong>状态：</strong> <span class="status-{{ payload.run.status }}">{{ payload.run.status }}</span></p>
+      <p><strong>时延：</strong> {{ payload.run.total_latency_ms }} ms</p>
+      <p><strong>Token：</strong> {{ payload.run.total_tokens }}</p>
+      <p><strong>成本：</strong> {{ payload.run.total_cost_estimate }}</p>
+      <p><strong>实验：</strong> <a href="/experiments/{{ payload.run.experiment_id }}">{{ payload.run.experiment_id }}</a></p>
+    </div>
+    <div class="panel">
+      <h2>评测结果</h2>
+      <pre>{{ payload.evaluation | tojson(indent=2) }}</pre>
+    </div>
+  </section>
+
+  <section class="grid two" style="margin-top: 18px;">
+    <div class="panel">
+      <h2>任务 Prompt</h2>
+      <pre>{{ payload.task.prompt }}</pre>
+    </div>
+    <div class="panel">
+      <h2>最终答案</h2>
+      <pre>{{ payload.run.final_answer | tojson(indent=2) }}</pre>
+      <p><strong>引用：</strong> {{ payload.run.citations | join(', ') }}</p>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top: 18px;">
+    <h2>执行轨迹</h2>
+    {% for step in payload.steps %}
+      <div class="step">
+        <p><strong>步骤 {{ step.step_index }}</strong> <span class="badge">{{ step.phase }}</span></p>
+        <p>{{ step.thought }}</p>
+        <pre>{{ step.action_payload | tojson(indent=2) }}</pre>
+        {% if step.observation %}
+          <pre>{{ step.observation | tojson(indent=2) }}</pre>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="muted">没有记录到执行步骤。</p>
+    {% endfor %}
+  </section>
+{% endblock %}

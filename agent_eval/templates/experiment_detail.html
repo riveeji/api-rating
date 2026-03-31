@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="grid two">
+    <div class="panel">
+      <h2>实验摘要</h2>
+      <p><span class="badge">{{ payload.experiment.experiment_id }}</span></p>
+      <p><strong>创建时间：</strong> {{ payload.experiment.created_at }}</p>
+      <p><strong>总运行数：</strong> {{ payload.run_count }}</p>
+      <p><strong>成功数：</strong> {{ payload.success_count }}</p>
+      <p><strong>任务数：</strong> {{ payload.experiment.task_ids | length }}</p>
+      <p><strong>配置数：</strong> {{ payload.experiment.config_ids | length }}</p>
+      <pre>{{ payload.experiment.metrics | tojson(indent=2) }}</pre>
+    </div>
+    <div class="panel">
+      <h2>实验范围</h2>
+      <p><strong>任务预设：</strong> {{ payload.experiment.task_preset or "全部任务" }}</p>
+      <p><strong>配置预设：</strong> {{ payload.experiment.config_preset or "全部配置" }}</p>
+      <p class="muted">任务 ID</p>
+      <pre>{{ payload.experiment.task_ids | tojson(indent=2) }}</pre>
+      <p class="muted">配置 ID</p>
+      <pre>{{ payload.experiment.config_ids | tojson(indent=2) }}</pre>
+    </div>
+  </section>
+
+  <section class="grid two" style="margin-top: 18px;">
+    <div class="panel">
+      <h2>配置对比</h2>
+      <div id="experiment-leaderboard" style="height: 320px;"></div>
+    </div>
+    <div class="panel">
+      <h2>任务类别成功率</h2>
+      <div id="experiment-category" style="height: 320px;"></div>
+    </div>
+  </section>
+
+  <section class="grid two" style="margin-top: 18px;">
+    <div class="panel">
+      <h2>配置聚合指标</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>配置</th>
+              <th>成功率</th>
+              <th>平均时延</th>
+              <th>平均 Token</th>
+              <th>恢复率</th>
+              <th>运行次数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in payload.leaderboard %}
+              <tr>
+                <td>{{ entry.display_name }}</td>
+                <td>{{ "%.2f"|format(entry.success_rate * 100) }}%</td>
+                <td>{{ "%.2f"|format(entry.avg_latency_ms) }} ms</td>
+                <td>{{ "%.1f"|format(entry.avg_tokens) }}</td>
+                <td>{{ "%.2f"|format(entry.recovery_rate * 100) }}%</td>
+                <td>{{ entry.total_runs }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="6" class="muted">暂无配置结果。</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>失败分布</h2>
+      <div id="experiment-failures" style="height: 320px;"></div>
+      <div class="table-wrap" style="margin-top: 12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>失败类型</th>
+              <th>次数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in payload.failure_breakdown %}
+              <tr>
+                <td>{{ item.failure_type }}</td>
+                <td>{{ item.count }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="2" class="muted">当前实验没有失败样本。</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top: 18px;">
+    <h2>运行明细</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>运行 ID</th>
+            <th>任务</th>
+            <th>类别</th>
+            <th>配置</th>
+            <th>状态</th>
+            <th>成功</th>
+            <th>时延</th>
+            <th>Token</th>
+            <th>失败类型</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in payload.runs %}
+            <tr>
+              <td><a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a></td>
+              <td>{{ run.task_id }}<br /><span class="muted">{{ run.task_title }}</span></td>
+              <td>{{ run.task_category }}</td>
+              <td>{{ run.display_name }}</td>
+              <td>{{ run.status }}</td>
+              <td>{{ "是" if run.success else "否" }}</td>
+              <td>{{ "%.2f"|format(run.total_latency_ms) }} ms</td>
+              <td>{{ run.total_tokens }}</td>
+              <td>{{ run.failure_type }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="9" class="muted">暂无运行记录。</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <script>
+    const leaderboard = {{ leaderboard_json | safe }};
+    const failures = {{ failures_json | safe }};
+    const categories = {{ category_json | safe }};
+
+    Plotly.newPlot(
+      "experiment-leaderboard",
+      [{
+        type: "bar",
+        x: leaderboard.map((item) => item.display_name),
+        y: leaderboard.map((item) => item.success_rate),
+        marker: { color: "#b55d31" }
+      }],
+      {
+        margin: { t: 10, r: 10, b: 100, l: 40 },
+        yaxis: { title: "成功率", range: [0, 1] }
+      },
+      { responsive: true }
+    );
+
+    Plotly.newPlot(
+      "experiment-category",
+      [{
+        type: "bar",
+        x: categories.map((item) => item.category),
+        y: categories.map((item) => item.success_rate),
+        marker: { color: "#704931" }
+      }],
+      {
+        margin: { t: 10, r: 10, b: 80, l: 40 },
+        yaxis: { title: "成功率", range: [0, 1] }
+      },
+      { responsive: true }
+    );
+
+    const failureCounts = failures.reduce((acc, item) => {
+      acc[item.failure_type] = (acc[item.failure_type] || 0) + 1;
+      return acc;
+    }, {});
+
+    Plotly.newPlot(
+      "experiment-failures",
+      [{
+        type: "pie",
+        labels: Object.keys(failureCounts).length ? Object.keys(failureCounts) : ["暂无失败"],
+        values: Object.values(failureCounts).length ? Object.values(failureCounts) : [1],
+        marker: { colors: ["#b55d31", "#d17c4f", "#e1b89a", "#704931", "#9b2c2c"] }
+      }],
+      {
+        margin: { t: 10, r: 10, b: 10, l: 10 }
+      },
+      { responsive: true }
+    );
+  </script>
+{% endblock %}
