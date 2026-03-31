@@ -2,10 +2,10 @@
 
 一个面向企业知识库 Agent 的双层项目：
 
-- 上层是在线知识库助手，面向真实提问、真实会话和带引用回答。
+- 上层是在线知识库助手，支持真实提问、会话保存、带引用回答和工具轨迹回放。
 - 下层是离线评测与优化平台，复用同一套工具和 runner 做 benchmark、失败分析和策略对比。
 
-这不是一个普通的聊天 demo，也不是单纯的 RAG 页面。它更接近一个真实 Agent 系统的最小闭环：
+这不是普通的聊天 demo，也不是单纯的 RAG 页面。它更接近一个真实 Agent 系统的最小闭环：
 
 1. 用户在在线助手里提问。
 2. Agent 调用文档检索、文档读取、SQL、结构化 case API、计算器等工具。
@@ -14,14 +14,56 @@
 
 界面默认使用中文。
 
-## 项目目标
+## Screenshots
+
+### Dashboard
+
+![Dashboard screenshot](docs/images/screenshots/dashboard.png)
+
+### Assistant
+
+![Assistant screenshot](docs/images/screenshots/assistant.png)
+
+### Experiment Detail
+
+![Experiment detail screenshot](docs/images/screenshots/experiment-detail.png)
+
+## Architecture
+
+![System architecture](docs/images/architecture.svg)
+
+这个系统分成两层：
+
+- 在线层负责真实问答与会话体验。
+- 离线层负责 benchmark、评分、失败归因和策略优化。
+
+两层共用：
+
+- 文档与结构化数据
+- 工具层
+- Agent runner
+- SQLite 持久化
+
+## Benchmark Snapshot
+
+![Benchmark snapshot](docs/images/benchmark-results.svg)
+
+当前内置 benchmark 由 3 种启发式策略构成：
+
+- `baseline_tool_calling`
+- `planner_executor`
+- `planner_executor_verifier`
+
+默认 benchmark 基于本地文档快照和本地任务集，不依赖实时联网结果，所以实验可复现。
+
+## Why This Project
 
 这个项目主要解决两个问题：
 
 1. 如何做一个最小可落地的企业知识库 Agent。
 2. 如何用统一实验框架评估和优化 Agent 的效果、稳定性和成本。
 
-相比“做一个 AI 助手”，这个项目强调的是：
+相比“做一个 AI 助手”，它强调的是：
 
 - tool calling
 - planner / executor / verifier 策略差异
@@ -31,9 +73,16 @@
 - recovery / fallback
 - latency / token / cost tradeoff
 
-## 当前能力
+更适合用来投：
 
-### 在线层：知识库助手
+- AI 应用研发
+- LLM / Agent 工程
+- Agent 优化工程
+- AI 平台 / 智能体基础设施
+
+## Key Features
+
+### 在线知识库助手
 
 入口：
 
@@ -47,13 +96,13 @@
 - 优先使用 live model 配置
 - live model 不可用时自动回退到本地确定性检索回答
 - 每条回答都保留：
-  - 引用的 `chunk_id`
+  - `chunk_id` 引用
   - 执行轨迹
   - 总时延
   - token 估算
   - 成本估算
 
-### 离线层：评测与优化平台
+### 离线评测平台
 
 入口：
 
@@ -68,12 +117,12 @@
 
 - 固定 benchmark 数据集
 - 任务组 / 配置组预设切片
-- 统一批量实验执行
+- 批量实验执行
 - 聚合指标统计
 - 失败类型分析
 - 单条 run 轨迹回放
 
-## Benchmark 设计
+## Benchmark Design
 
 ### 文档语料
 
@@ -83,9 +132,9 @@
 - `SQLite`
 - `DashScope / Qwen`
 
-所有语料都落在：
+语料目录：
 
-- [agent_eval/assets/corpus](J:/ide-workspace/新建文件夹/agent_eval/assets/corpus)
+- [`agent_eval/assets/corpus`](agent_eval/assets/corpus)
 
 ### 任务集
 
@@ -95,9 +144,9 @@
 - 15 个多步工具调用任务
 - 10 个故障恢复任务
 
-任务定义和种子生成位于：
+种子定义位于：
 
-- [agent_eval/seed.py](J:/ide-workspace/新建文件夹/agent_eval/seed.py)
+- [`agent_eval/seed.py`](agent_eval/seed.py)
 
 ### 工具层
 
@@ -112,61 +161,21 @@
 
 实现位于：
 
-- [agent_eval/tools.py](J:/ide-workspace/新建文件夹/agent_eval/tools.py)
+- [`agent_eval/tools.py`](agent_eval/tools.py)
 
 ### 策略层
 
-支持 3 种核心策略：
+当前核心策略：
 
 - `baseline_tool_calling`
 - `planner_executor`
 - `planner_executor_verifier`
 
-启发式和实时模型 runner 都在：
+启发式与实时模型 runner 位于：
 
-- [agent_eval/runners.py](J:/ide-workspace/新建文件夹/agent_eval/runners.py)
+- [`agent_eval/runners.py`](agent_eval/runners.py)
 
-## 在线助手怎么工作
-
-在线助手的主逻辑位于：
-
-- [agent_eval/assistant.py](J:/ide-workspace/新建文件夹/agent_eval/assistant.py)
-
-工作流如下：
-
-1. 用户在 `/assistant` 输入问题。
-2. 系统根据当前配置选择 `heuristic / Ollama / DashScope`。
-3. 如果是 live config，优先走实时 tool-calling runner。
-4. 如果 live model 不可用，或输出没有有效引用，则回退到本地确定性检索回答。
-5. 会话和消息写入 SQLite。
-6. 页面展示答案、引用和完整轨迹。
-
-这意味着项目即使没有实时模型，也能作为一个“可运行的知识库助手”展示；而一旦接入 `qwen3.5:9b` 或 DashScope，就能自然升级成真实 Agent。
-
-## 离线平台怎么工作
-
-离线实验编排位于：
-
-- [agent_eval/experiments.py](J:/ide-workspace/新建文件夹/agent_eval/experiments.py)
-
-流程如下：
-
-1. 解析任务预设与配置预设。
-2. 生成一个 experiment。
-3. 对选中的 `config x task` 全量运行。
-4. 每个 run 结束后写入：
-   - run
-   - steps
-   - tool calls
-   - evaluation
-5. 聚合 experiment 指标并落库。
-6. 页面展示排行榜、失败分布和实验详情。
-
-数据库实现位于：
-
-- [agent_eval/storage.py](J:/ide-workspace/新建文件夹/agent_eval/storage.py)
-
-## 指标体系
+## Metrics
 
 每次 run 记录：
 
@@ -200,9 +209,9 @@
 
 评测器位于：
 
-- [agent_eval/evaluator.py](J:/ide-workspace/新建文件夹/agent_eval/evaluator.py)
+- [`agent_eval/evaluator.py`](agent_eval/evaluator.py)
 
-## 技术栈
+## Tech Stack
 
 - Python
 - FastAPI
@@ -212,60 +221,59 @@
 - Plotly
 - Ollama / DashScope OpenAI-compatible API
 
-项目配置位于：
+配置文件：
 
-- [pyproject.toml](J:/ide-workspace/新建文件夹/pyproject.toml)
-- [agent_eval/config.py](J:/ide-workspace/新建文件夹/agent_eval/config.py)
+- [`pyproject.toml`](pyproject.toml)
+- [`agent_eval/config.py`](agent_eval/config.py)
+- [`.env.example`](.env.example)
 
-## 项目结构
+## Project Structure
 
 ```text
 agent_eval/
-  assets/corpus/        本地文档快照
-  assistant.py          在线知识库助手服务
-  cli.py                Seed 与 benchmark 命令
-  config.py             环境变量配置
-  evaluator.py          规则评测器
-  experiments.py        实验编排与聚合
-  llm.py                DashScope / Ollama OpenAI-compatible 客户端
-  models.py             任务、实验、助手、轨迹等数据模型
-  presets.py            benchmark 任务组 / 配置组预设
-  runners.py            启发式与 live runner
-  seed.py               文档、任务、配置种子
-  storage.py            SQLite schema 与持久化
-  tools.py              工具注册与故障注入
-  utils.py              JSON / token / cost / FTS 工具函数
-  web.py                FastAPI 页面与接口
-  templates/            中文服务端模板
-  static/               样式文件
+  assets/corpus/        Local documentation snapshots
+  assistant.py          Online knowledge-base assistant service
+  cli.py                Seed and benchmark commands
+  config.py             Environment-driven settings
+  evaluator.py          Rule-based evaluator
+  experiments.py        Experiment orchestration and aggregation
+  llm.py                DashScope / Ollama OpenAI-compatible client
+  models.py             Schemas for tasks, runs, sessions, and evaluation
+  presets.py            Benchmark task/config presets
+  runners.py            Heuristic and live-model runners
+  seed.py               Corpus, task, and config seed data
+  storage.py            SQLite schema and persistence
+  tools.py              Tool registry and fault injection
+  utils.py              JSON / token / cost / FTS helpers
+  web.py                FastAPI app
+  templates/            Chinese server-rendered templates
+  static/               Styles
+docs/images/            README assets
+scripts/                Asset generation helpers
 tests/
-  test_seed.py
-  test_runner.py
-  test_web.py
-  test_assistant.py
 ```
 
-## 本地启动
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install dependencies
 
 ```bash
 python -m pip install -e .[dev]
 ```
 
-### 2. 灌种子数据
+### 2. Seed demo data
 
 ```bash
 python -m agent_eval.cli seed-demo
 ```
 
-### 3. 跑一轮 benchmark
+### 3. Run a benchmark
 
 ```bash
 python -m agent_eval.cli run-benchmark
 ```
 
-### 4. 启动 Web
+### 4. Start the web app
 
 ```bash
 python -m uvicorn agent_eval.web:app --reload
@@ -286,7 +294,7 @@ python -m uvicorn agent_eval.web:app --reload --reload-dir "J:\ide-workspace\新
 - `http://127.0.0.1:8000/leaderboard`
 - `http://127.0.0.1:8000/failures`
 
-## CLI 用法
+## CLI
 
 初始化数据库：
 
@@ -333,15 +341,15 @@ python -m agent_eval.cli run-benchmark --task-id TASK-SH-001 --config-id baselin
 - `dashscope_live`
 - `ollama_live`
 
-## Web 路由
+## Web Routes
 
-### 在线助手
+### Online assistant
 
 - `GET /assistant`
 - `GET /assistant/{session_id}`
 - `POST /assistant/ask`
 
-### 评测平台
+### Evaluation platform
 
 - `GET /`
 - `POST /experiments/run`
@@ -354,11 +362,9 @@ python -m agent_eval.cli run-benchmark --task-id TASK-SH-001 --config-id baselin
 
 HTML 页面支持 `?format=json` 返回 JSON。
 
-## 配置实时模型
+## Using qwen3.5:9b with Ollama
 
-### Ollama + qwen3.5:9b
-
-如果你本地已经安装了 Ollama 并拉好了 `qwen3.5:9b`，可以这样启用：
+如果你本地已经装好了 Ollama 并拉取了 `qwen3.5:9b`，可以这样启用：
 
 ```powershell
 $env:AGENT_EVAL_INCLUDE_LIVE_OLLAMA_CONFIGS="true"
@@ -377,9 +383,9 @@ python -m agent_eval.cli seed-demo
 - `Ollama 实时规划-执行`
 - `Ollama 实时规划-执行-校验`
 
-在线助手会优先选实时配置；如果实时模型调用失败，会自动回退到本地确定性检索回答。
+在线助手会优先使用实时配置；如果实时模型调用失败，会自动回退到本地确定性检索回答。
 
-### DashScope
+## DashScope
 
 ```powershell
 $env:AGENT_EVAL_DASHSCOPE_API_KEY="your_key"
@@ -391,32 +397,39 @@ $env:AGENT_EVAL_VERIFIER_MODEL="qwen-max"
 python -m agent_eval.cli seed-demo
 ```
 
-## 当前项目适合怎么讲
+## Generate README Assets
 
-最好的讲法不是“我做了一个聊天机器人”，而是：
+生成架构图和 benchmark 结果图：
 
-> 我做了一个企业知识库 Agent，并设计了配套的离线评测与优化平台。在线层负责真实问答、工具调用和带引用回答；离线层负责统一 benchmark、记录轨迹、分析失败并比较不同策略在成功率、时延、成本和恢复能力上的差异。
+```bash
+python scripts/generate_readme_assets.py
+```
 
-这个讲法更贴近：
+当前仓库中的截图来自本地运行中的应用页面，位于：
 
-- AI 应用研发
-- LLM / Agent 工程
-- Agent 优化工程
-- AI 平台 / 智能体基础设施
+- [`docs/images/screenshots`](docs/images/screenshots)
 
-## 已验证内容
+## Why This Project Is Resume-Friendly
 
-当前本地已验证：
+一个更强的项目表述方式是：
 
-- `python -m pytest` 通过
+> 我实现了一个企业知识库 Agent，并设计了配套的离线评测与优化平台。在线层负责真实问答、工具调用和带引用回答；离线层负责统一 benchmark、记录轨迹、分析失败并比较不同策略在成功率、时延、成本和恢复能力上的差异。
+
+这个表达比“做了一个 AI 助手”更有信息量，也更贴近 Agent 工程岗位。
+
+## Verified Locally
+
+本地已验证：
+
+- `python -m pytest`
 - benchmark 预设可运行
 - 中文页面可正常渲染
 - `/assistant/ask` 可创建会话并返回带引用回答
 - `CASE-001` 场景可结合 case API、SQL 和文档检索生成回答
 
-## 后续建议
+## Roadmap
 
-如果继续把项目往“更像真实产品”推进，优先级建议是：
+如果继续往“更像真实产品”推进，优先级建议是：
 
 1. 把在线会话中的失败样本一键转成 benchmark 候选任务。
 2. 接真实文档目录导入，而不是只用种子快照。
@@ -424,9 +437,7 @@ python -m agent_eval.cli seed-demo
 4. 增加实验对比导出页，用于写报告或简历素材。
 5. 接权限与用户体系，把助手做成真正的内部工具。
 
-## 开发与测试
-
-运行测试：
+## Tests
 
 ```bash
 python -m pytest
