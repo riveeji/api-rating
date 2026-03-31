@@ -63,22 +63,9 @@
 1. 如何做一个最小可落地的企业知识库 Agent。
 2. 如何用统一实验框架评估和优化 Agent 的效果、稳定性和成本。
 
-相比“做一个 AI 助手”，它强调的是：
 
-- tool calling
-- planner / executor / verifier 策略差异
-- trajectory logging
-- offline evaluation
-- failure classification
-- recovery / fallback
-- latency / token / cost tradeoff
 
-更适合用来投：
 
-- AI 应用研发
-- LLM / Agent 工程
-- Agent 优化工程
-- AI 平台 / 智能体基础设施
 
 ## Key Features
 
